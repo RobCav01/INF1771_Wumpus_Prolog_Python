@@ -235,7 +235,7 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %apagar esta linha - apenas para demonstracao aleatoria
-executa_acao(X) :- L=['virar_esquerda','virar_direita','andar','pegar'],random_between(1,4,I), nth1(I, L, X),!.
+%executa_acao(X) :- L=['virar_esquerda','virar_direita','andar','pegar'],random_between(1,4,I), nth1(I, L, X),!.
 
 %apagar linhas abaixo... sao exemplos de resposta
 %executa_acao(andar) :- posicao(PX, _, oeste), PX > 1, X = andar,!.
@@ -243,6 +243,16 @@ executa_acao(X) :- L=['virar_esquerda','virar_direita','andar','pegar'],random_b
 %executa_acao(pegar) :- posicao(PX, PY,_), tem_ouro(PX, PY), !.
 %executa_acao(voltar) :- peguei_todos_ouros,!.
 
+%executa_acao(pegar) :- tem_ouro(posicao).	%prende oro
+executa_acao(torna) :- posicao(X, Y, _), X=10, Y=8, !.
+executa_acao(teleport) :- energia(X), X>50.
+/*
+executa_acao(_) :- esplora.
 
-
-
+% Regola per esplorare caselle non visitate ma di cui si ha certezza
+esplora :-
+	write("Inizio esplorazione:"),
+    % Trova una casella certa ma non visitata
+    certeza(X_target, Y_target),
+    \+ visitado(X_target, Y_target).
+*/

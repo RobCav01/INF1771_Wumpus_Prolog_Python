@@ -7,11 +7,16 @@ from threading import Thread
 import pathlib
 current_path = str(pathlib.Path().resolve())
 
-auto_play_tempo = 0.5
+from heapq import heappop, heappush
+from collections import deque
+
+
+
+auto_play_tempo = 0.1
 auto_play = True # desligar para controlar manualmente
 show_map = False
 
-scale = 60
+scale = 50
 size_x = 12
 size_y = 12
 width = size_x * scale  #Largura Janela
@@ -43,6 +48,123 @@ prolog.consult((current_path + '\\main.pl').replace('\\','/'))
 
 last_action = ""
 
+
+# Restituisce il path come vettore ordinato di coordinate (riga, colonna), da start a end
+# I parametri start e end sono in coordinate (riga, colonna)
+def astar(start, end, grid):
+    # Funzione per calcolare la distanza di Manhattan (euristica per A*)
+    def heuristic(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    
+    # Movimento nelle 4 direzioni
+    directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    open_set = []
+    heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, end)}
+
+
+    while open_set:
+        current = heappop(open_set)[1]
+
+        if current == end:
+            # Ricostruzione del percorso ottimo
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            #path.append(start) # Non serve in quanto l'info di start si ha in player_pos
+            return path[::-1]   # Inversione lista
+
+        for d in directions:
+            neighbor = (current[0] + d[0], current[1] + d[1])
+            x_neigh = neighbor[1]
+            y_neigh = neighbor[0]
+                    
+            if (    
+                    # Verifica che il vicino sia nei limiti della mappa,
+                    0 <= x_neigh < size_x and
+                    0 <= y_neigh < size_y and
+                    # sia già stato visitato o con certezza,
+                    ((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
+                    # e non sia un burrone/teletrasporto/mostro
+                    grid[y_neigh][x_neigh] not in ['P', 'T', 'D', 'd', 'PD']
+            ):
+                tentative_g_score = g_score[current] + 1
+
+                if tentative_g_score < g_score.get(neighbor, float('inf')):
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, end)
+                    heappush(open_set, (f_score[neighbor], neighbor))
+
+    return []  # Nessun percorso trovato
+
+
+def get_rotations(coordXYTargetAdjPlayer):
+    xPlayer = player_pos[0]
+    yPlayer = player_pos[1]
+    xTarget = coordXYTargetAdjPlayer[0]
+    yTarget = coordXYTargetAdjPlayer[1]
+
+    # Calcolo direzione in cui andare
+    if xTarget == xPlayer+1:
+        dir = "leste"
+    elif xTarget == xPlayer-1:
+        dir = "oeste"
+    elif yTarget == yPlayer+1:
+        dir = "norte"
+    else:
+        dir = "sul"
+    
+    dirPlayer = player_pos[2]
+    # Player già rivolto nella direzione in cui andare
+    if dirPlayer == dir:
+        return []
+
+    if dirPlayer == "norte":
+        if dir == "este":
+            return ["virar_direita"]
+        elif dir == "sul":
+            return ["virar_direita", "virar_direita"]
+        else:   # dir == oeste
+            return ["virar_esquerda"]
+        
+    if dirPlayer == "leste":
+        if dir == "norte":
+            return ["virar_esquerda"]
+        elif dir == "sul":
+            return ["virar_direita"]
+        else:   # dir == oeste
+            return ["virar_direita", "virar_direita"]
+        
+    if dirPlayer == "sul":
+        if dir == "norte":
+            return ["virar_direita", "virar_direita"]
+        elif dir == "este":
+            return ["virar_esquerda"]
+        else:   # dir == oeste
+            return ["virar_direita"]
+        
+    if dirPlayer == "oeste":
+        if dir == "norte":
+            return ["virar_direita"]
+        elif dir == "este":
+            return ["virar_direita", "virar_direita"]
+        else:   # dir == sul
+            return ["virar_esquerda"]
+
+
+def next_actions_prolog(coordRowColTargAdjPlayer):
+    # Conversione da coordinate (riga, colonna) a coordinate (x, y)
+    coordXYTarget = (coordRowColTargAdjPlayer[1]+1, 12-coordRowColTargAdjPlayer[0])
+    actions = get_rotations(coordXYTarget)
+    actions.append("andar")
+    return actions
+
+
+
 def decisao():
 
     acao = ""    
@@ -52,6 +174,48 @@ def decisao():
         acao = acoes[0]['X']
 
     return acao
+
+def esplora():
+    moves = [
+    "andar",
+    "virar_direita",
+    "andar",
+    "andar",
+    "virar_esquerda",
+    "andar",
+    "virar_direita",
+    "andar",
+    "andar",
+    "andar",
+    "andar",
+    "andar",
+    "virar_direita",
+    "virar_direita",
+    "andar",
+    "virar_direita",
+    "andar",
+    "andar",
+    "andar",
+    "andar",
+    "virar_direita",
+    "andar",
+    "andar",
+    "andar",
+    "virar_direita",
+    "virar_direita",
+    "virar_direita",
+    "andar",
+    "andar",
+    "andar",
+    "virar_direita",
+    "virar_direita",
+    "andar",
+    "andar"
+    ]
+    for move in moves:
+        exec_prolog(move)
+        update_prolog()
+        time.sleep(auto_play_tempo)
 
 class Th(Thread):
 
@@ -65,7 +229,27 @@ class Th(Thread):
 
         while player_pos[2] != 'morto':
             
-            exec_prolog(decisao())
+            acao = decisao()
+            print(acao)
+            if acao == "teleport":
+                esplora()
+
+            elif acao == "torna":
+                pathCoda = deque(astar((player_pos[1]-1, player_pos[0]-1), (0, 0), mapa))
+
+                while len(pathCoda) > 0:
+                    coordRowColTarget = pathCoda.popleft()
+                    actions = next_actions_prolog(coordRowColTarget)
+                    for act in actions:
+                        exec_prolog(act)
+                        update_prolog()
+                        time.sleep(auto_play_tempo)
+                print("ARRIVATOOO")
+                time.sleep(100)
+
+            else:
+                exec_prolog(acao)
+                
             update_prolog()
             time.sleep(auto_play_tempo)
 
