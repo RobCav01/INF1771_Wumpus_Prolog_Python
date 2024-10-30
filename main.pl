@@ -244,15 +244,22 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 %executa_acao(voltar) :- peguei_todos_ouros,!.
 
 %executa_acao(pegar) :- tem_ouro(posicao).	%prende oro
-executa_acao(torna) :- posicao(X, Y, _), X=10, Y=8, !.
-executa_acao(teleport) :- energia(X), X>50.
-/*
-executa_acao(_) :- esplora.
+%executa_acao(tornare) :- peguei_todos_ouros, !.
 
-% Regola per esplorare caselle non visitate ma di cui si ha certezza
-esplora :-
-	write("Inizio esplorazione:"),
-    % Trova una casella certa ma non visitata
-    certeza(X_target, Y_target),
-    \+ visitado(X_target, Y_target).
-*/
+
+find_position_to_explore(X, Y) :-
+    certeza(X, Y),		% Controlla che la cella (X, Y) sia certa
+    \+ visitado(X, Y),	% Controlla che la cella (X, Y) non sia già stata visitata
+	\+ tile(X, Y, 'P'),		% La cella non deve contenere un burrone
+    \+ tile(X, Y, 'D'),		% La cella non deve contenere un mostro grande
+	\+ tile(X, Y, 'd'),		% La cella non deve contenere un mostro piccolo
+    \+ tile(X, Y, 'T'),		% La cella non deve contenere un pipistrello
+    !.
+
+executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.
+
+executa_acao(Acao) :-
+    (   
+        find_position_to_explore(X, Y)
+    ->  format(atom(Acao), 'esplorare(~w,~w)', [X, Y])
+    ).

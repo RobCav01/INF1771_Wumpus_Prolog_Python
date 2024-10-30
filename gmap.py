@@ -12,7 +12,7 @@ from collections import deque
 
 
 
-auto_play_tempo = 0.1
+auto_play_tempo = 0.2
 auto_play = True # desligar para controlar manualmente
 show_map = False
 
@@ -124,7 +124,7 @@ def get_rotations(coordXYTargetAdjPlayer):
         return []
 
     if dirPlayer == "norte":
-        if dir == "este":
+        if dir == "leste":
             return ["virar_direita"]
         elif dir == "sul":
             return ["virar_direita", "virar_direita"]
@@ -142,7 +142,7 @@ def get_rotations(coordXYTargetAdjPlayer):
     if dirPlayer == "sul":
         if dir == "norte":
             return ["virar_direita", "virar_direita"]
-        elif dir == "este":
+        elif dir == "leste":
             return ["virar_esquerda"]
         else:   # dir == oeste
             return ["virar_direita"]
@@ -150,19 +150,30 @@ def get_rotations(coordXYTargetAdjPlayer):
     if dirPlayer == "oeste":
         if dir == "norte":
             return ["virar_direita"]
-        elif dir == "este":
+        elif dir == "leste":
             return ["virar_direita", "virar_direita"]
         else:   # dir == sul
             return ["virar_esquerda"]
 
 
-def next_actions_prolog(coordRowColTargAdjPlayer):
+def next_movements_prolog(coordRowColTargAdjPlayer):
     # Conversione da coordinate (riga, colonna) a coordinate (x, y)
-    coordXYTarget = (coordRowColTargAdjPlayer[1]+1, 12-coordRowColTargAdjPlayer[0])
+    coordXYTarget = (coordRowColTargAdjPlayer[1]+1, coordRowColTargAdjPlayer[0]+1)
     actions = get_rotations(coordXYTarget)
     actions.append("andar")
     return actions
 
+
+def move_player_to(xTarget, yTarget):
+    pathCoda = deque(astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa))
+
+    while len(pathCoda) > 0:
+        coordRowColTarget = pathCoda.popleft()
+        movements = next_movements_prolog(coordRowColTarget)
+        for mov in movements:
+            exec_prolog(mov)
+            update_prolog()
+            time.sleep(auto_play_tempo)
 
 
 def decisao():
@@ -175,48 +186,7 @@ def decisao():
 
     return acao
 
-def esplora():
-    moves = [
-    "andar",
-    "virar_direita",
-    "andar",
-    "andar",
-    "virar_esquerda",
-    "andar",
-    "virar_direita",
-    "andar",
-    "andar",
-    "andar",
-    "andar",
-    "andar",
-    "virar_direita",
-    "virar_direita",
-    "andar",
-    "virar_direita",
-    "andar",
-    "andar",
-    "andar",
-    "andar",
-    "virar_direita",
-    "andar",
-    "andar",
-    "andar",
-    "virar_direita",
-    "virar_direita",
-    "virar_direita",
-    "andar",
-    "andar",
-    "andar",
-    "virar_direita",
-    "virar_direita",
-    "andar",
-    "andar"
-    ]
-    for move in moves:
-        exec_prolog(move)
-        update_prolog()
-        time.sleep(auto_play_tempo)
-
+    
 class Th(Thread):
 
     
@@ -227,24 +197,19 @@ class Th(Thread):
 
         time.sleep(1)
 
+        update_prolog()
         while player_pos[2] != 'morto':
-            
+
             acao = decisao()
             print(acao)
-            if acao == "teleport":
-                esplora()
+            if "esplorare" in acao:
+                coordsTarget = acao.replace("esplorare(", "").replace(")", "").split(",")
+                xTarg, yTarg = int(coordsTarget[0]), int(coordsTarget[1])
+                move_player_to(xTarg, yTarg)
 
-            elif acao == "torna":
-                pathCoda = deque(astar((player_pos[1]-1, player_pos[0]-1), (0, 0), mapa))
-
-                while len(pathCoda) > 0:
-                    coordRowColTarget = pathCoda.popleft()
-                    actions = next_actions_prolog(coordRowColTarget)
-                    for act in actions:
-                        exec_prolog(act)
-                        update_prolog()
-                        time.sleep(auto_play_tempo)
-                print("ARRIVATOOO")
+            elif acao == "tornare":
+                move_player_to(1, 1)
+                print("WIN!")
                 time.sleep(100)
 
             else:
