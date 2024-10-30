@@ -247,19 +247,33 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 %executa_acao(tornare) :- peguei_todos_ouros, !.
 
 
+% Calcolo della distanza di Manhattan
+manhattan_dist(X1, Y1, X2, Y2, Dist) :-
+    Dist is abs(X2 - X1) + abs(Y2 - Y1).
+
 find_position_to_explore(X, Y) :-
-    certeza(X, Y),		% Controlla che la cella (X, Y) sia certa
-    \+ visitado(X, Y),	% Controlla che la cella (X, Y) non sia già stata visitata
-	\+ tile(X, Y, 'P'),		% La cella non deve contenere un burrone
-    \+ tile(X, Y, 'D'),		% La cella non deve contenere un mostro grande
-	\+ tile(X, Y, 'd'),		% La cella non deve contenere un mostro piccolo
-    \+ tile(X, Y, 'T'),		% La cella non deve contenere un pipistrello
+    posicao(X_pl, Y_pl, _),  % Posizione del player
+    findall(
+        (Dist, X, Y),
+        (   certeza(X, Y),          % La cella deve essere certa,
+            \+ (X = X_pl, Y = Y_pl), % diversa dalla posizione attuale del giocatore,
+            \+ visitado(X, Y),       % non visitata,
+            \+ tile(X, Y, 'P'),      % non un burrone,
+            \+ tile(X, Y, 'D'),      % non un mostro grande,
+            \+ tile(X, Y, 'd'),      % non un mostro piccolo,
+            \+ tile(X, Y, 'T'),      % non un pipistrello
+            manhattan_dist(X_pl, Y_pl, X, Y, Dist)  % Calcola la distanza tra cella e player
+        ),
+        CelleConDistanza
+    ),
+    sort(1, @=<, CelleConDistanza, [(_, X, Y) | _]),  % Ordina per distanza crescente e prende il primo elemento
     !.
 
-executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.
 
 executa_acao(Acao) :-
     (   
         find_position_to_explore(X, Y)
     ->  format(atom(Acao), 'esplorare(~w,~w)', [X, Y])
     ).
+
+executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.
