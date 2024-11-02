@@ -251,7 +251,7 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 manhattan_dist(X1, Y1, X2, Y2, Dist) :-
     Dist is abs(X2 - X1) + abs(Y2 - Y1).
 
-find_position_to_explore(X, Y) :-
+explore_certeza(X, Y) :-
     posicao(X_pl, Y_pl, _),  % Posizione del player
     findall(
         (Dist, X, Y),
@@ -269,11 +269,69 @@ find_position_to_explore(X, Y) :-
     sort(1, @=<, CelleConDistanza, [(_, X, Y) | _]),  % Ordina per distanza crescente e prende il primo elemento
     !.
 
+explore_not_certeza(X, Y) :-
+    findall(
+        (AX, AY),
+        (
+            adjacente(AX, AY),		% Trova le celle adiacenti
+            \+ visitado(AX, AY),	% La cella non è stata visitata
+            (
+				(
+					certeza(AX, AY),        % Se la cella è certa
+                	\+ tile(AX, AY, 'P'),	% non deve essere un burrone
+                	\+ tile(AX, AY, 'D'),	% né un mostro grande
+					\+ tile(AX, AY, 'd'),	% né un mostro piccolo
+                	\+ tile(AX, AY, 'T')	% né un pipistrello
+				)   
+            	;   	
+				\+ certeza(AX, AY)	% Oppure non è certa
+            )
+        ),
+        CelleAdiacentiPossibili
+    ),
+    random_member((X, Y), CelleAdiacentiPossibili),	% Seleziona casualmente una cella
+	!.
+
+% Per sapere se in (X, Y) si ha in memoria uno tra '.   D' o '?   D'
+presenza_osservaz_mostro(X, Y) :-
+    memory(X, Y, Z),
+    member(passos, Z).          % Presenza di passi (ovvero 'D') nella memoria
+
+% Per sapere se in (X, Y) si ha in memoria '?   D'
+presenza_incertezza_mostro(X, Y) :-
+    presenza_osservaz_mostro(X, Y),
+    \+ visitado(X, Y),          % La cella non è stata visitata
+    \+ certeza(X, Y).           % La cella non è certa (ovvero '?')
+
+presenza_incertezza_mostro_1_param((X, Y)) :-
+    presenza_incertezza_mostro(X, Y).
+
+
+executa_acao(Acao) :-
+    findall((X, Y), adjacente(X, Y), Adjacentes),
+    forall(member((X, Y), Adjacentes),
+        (
+            presenza_osservaz_mostro(X, Y)
+        )
+    ),
+	include(
+		presenza_incertezza_mostro_1_param,
+        Adjacentes,
+        AdjacentesPossibili
+    ),
+    random_member((X, Y), AdjacentesPossibili),
+    format(atom(Acao), 'esplorare_incerteza(~w,~w)', [X, Y]), !.
 
 executa_acao(Acao) :-
     (   
-        find_position_to_explore(X, Y)
-    ->  format(atom(Acao), 'esplorare(~w,~w)', [X, Y])
+        (
+			explore_certeza(X, Y),
+			Modalita = "certeza"
+			;
+			explore_not_certeza(X, Y),
+			Modalita = "incerteza"
+		)
+    	->  format(atom(Acao), 'esplorare_~w(~w,~w)', [Modalita, X, Y])
     ).
 
-executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.
+%executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.

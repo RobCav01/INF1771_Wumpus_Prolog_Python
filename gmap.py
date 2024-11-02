@@ -86,7 +86,7 @@ def astar(start, end, grid):
                     # Verifica che il vicino sia nei limiti della mappa,
                     0 <= x_neigh < size_x and
                     0 <= y_neigh < size_y and
-                    # sia già stato visitato o con certezza,
+                    # sia già stato visitato o con certezza
                     ((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
                     # e non sia un burrone/teletrasporto/mostro
                     grid[y_neigh][x_neigh] not in ['P', 'T', 'D', 'd', 'PD']
@@ -155,7 +155,6 @@ def get_rotations(coordXYTargetAdjPlayer):
         else:   # dir == sul
             return ["virar_esquerda"]
 
-
 def next_movements_prolog(coordRowColTargAdjPlayer):
     # Conversione da coordinate (riga, colonna) a coordinate (x, y)
     coordXYTarget = (coordRowColTargAdjPlayer[1]+1, coordRowColTargAdjPlayer[0]+1)
@@ -163,17 +162,21 @@ def next_movements_prolog(coordRowColTargAdjPlayer):
     actions.append("andar")
     return actions
 
+def execute_movements_player(movementsProlog):
+    for mov in movementsProlog:
+        exec_prolog(mov)
+        update_prolog()
+        time.sleep(auto_play_tempo)
 
-def move_player_to(xTarget, yTarget):
+def move_player_with_certeza_to(xTarget, yTarget):
     pathCoda = deque(astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa))
+    print("path", pathCoda)
 
     while len(pathCoda) > 0:
         coordRowColTarget = pathCoda.popleft()
         movements = next_movements_prolog(coordRowColTarget)
-        for mov in movements:
-            exec_prolog(mov)
-            update_prolog()
-            time.sleep(auto_play_tempo)
+        execute_movements_player(movements)
+
 
 
 def decisao():
@@ -196,19 +199,35 @@ class Th(Thread):
     def run(self):
 
         time.sleep(1)
+        turno = 0
 
         update_prolog()
         while player_pos[2] != 'morto':
+            turno  += 1
+            print("\nTurno", turno)
 
             acao = decisao()
             print(acao)
             if "esplorare" in acao:
-                coordsTarget = acao.replace("esplorare(", "").replace(")", "").split(",")
-                xTarg, yTarg = int(coordsTarget[0]), int(coordsTarget[1])
-                move_player_to(xTarg, yTarg)
+                acao = acao.replace("esplorare_", "")
+                coordStartInd = acao.find("(")
+                coordTarget = acao[coordStartInd+1: len(acao)-1].split(",")
+                xTarg, yTarg = int(coordTarget[0]), int(coordTarget[1])
+                print("Moving to", xTarg, yTarg)
+                
+                mode = acao[:coordStartInd]
+                print(mode)
+                print("Certezas:", certezas)
+                print("Visitados:", visitados)
+                if mode == "incerteza":
+                    movements = next_movements_prolog((yTarg-1, xTarg-1))
+                    execute_movements_player(movements)
+                else:
+                    move_player_with_certeza_to(xTarg, yTarg)
+
 
             elif acao == "tornare":
-                move_player_to(1, 1)
+                move_player_with_certeza_to(1, 1)
                 print("WIN!")
                 time.sleep(100)
 
