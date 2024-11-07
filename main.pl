@@ -237,19 +237,6 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%apagar esta linha - apenas para demonstracao aleatoria
-%executa_acao(X) :- L=['virar_esquerda','virar_direita','andar','pegar'],random_between(1,4,I), nth1(I, L, X),!.
-
-%apagar linhas abaixo... sao exemplos de resposta
-%executa_acao(andar) :- posicao(PX, _, oeste), PX > 1, X = andar,!.
-%executa_acao(andar) :- posicao(PX, _, leste), PX < 3, X = andar,!.
-%executa_acao(pegar) :- posicao(PX, PY,_), tem_ouro(PX, PY), !.
-%executa_acao(voltar) :- peguei_todos_ouros,!.
-
-%executa_acao(pegar) :- tem_ouro(posicao).	%prende oro
-%executa_acao(tornare) :- peguei_todos_ouros, !.
-
 ori_raccolti(0).
 inizializza_celle_pozioni :-
     abolish(celle_pozioni/1),

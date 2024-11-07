@@ -51,9 +51,41 @@ prolog.consult((current_path + '\\mapa.pl').replace('\\','/'))
 last_action = ""
 
 
+def astar_neigh_safe(x_neigh, y_neigh, grid):
+    return (
+        # Vicino già stato visitato o con certezza
+        ((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
+        # e non un burrone/teletrasporto/mostro
+        grid[y_neigh][x_neigh] not in ['P', 'T', 'D']
+    )
+
+def astar_neigh_monster(x_neigh, y_neigh, grid):
+    return (
+        # Vicino già stato visitato o con certezza e non un burrone/teletrasporto/mostro
+        astar_neigh_safe(x_neigh, y_neigh, grid) or
+        (
+            # oppure player con più di 80 di energia (per poter sopravvivere al mostro),
+            energia > 80 and
+            # vicino già stato visitato o con certezza
+            ((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
+            # e non un burrone/teletrasporto (potrebbe essere un mostro)
+            grid[y_neigh][x_neigh] not in ['P', 'T']
+        )
+    )
+
+def astar_neigh_unsafe(x_neigh, y_neigh, grid):
+    return (
+        # Vicino già stato visitato o con certezza e non un burrone/teletrasporto/mostro
+        # oppure player con più di 80 di energia (per poter sopravvivere al mostro), vicino già stato visitato o con certezza
+        # e non un burrone/teletrasporto (potrebbe essere un mostro)
+        astar_neigh_monster(x_neigh, y_neigh, grid) or
+        # oppure non ancora visitato nè con certezza
+        ((x_neigh+1, y_neigh+1) not in visitados and (x_neigh+1, y_neigh+1) not in certezas)
+    )
+
 # Restituisce il path come vettore ordinato di coordinate (riga, colonna), da start a end
 # I parametri start e end sono in coordinate (riga, colonna)
-def astar(start, end, grid):
+def astar(start, end, grid, neigh=astar_neigh_safe):
     # Funzione per calcolare la distanza di Manhattan (euristica per A*)
     def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -88,10 +120,7 @@ def astar(start, end, grid):
                     # Verifica che il vicino sia nei limiti della mappa,
                     0 <= x_neigh < size_x and
                     0 <= y_neigh < size_y and
-                    # sia già stato visitato o con certezza
-                    #((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
-                    # e non sia un burrone/teletrasporto/mostro
-                    grid[y_neigh][x_neigh] not in ['P', 'T', 'D', 'PD']
+                    neigh(x_neigh, y_neigh, grid)
             ):
                 tentative_g_score = g_score[current] + 1
 
@@ -168,14 +197,21 @@ def execute_movements_player(movementsProlog):
     for mov in movementsProlog:
         exec_prolog(mov)
         update_prolog()
-        print("Pos player", player_pos[0], player_pos[1])
+        #print("Now in:", player_pos[0], player_pos[1], player_pos[2])
         time.sleep(auto_play_tempo)
 
 def move_player_with_certeza_to(xTarget, yTarget):
-    pathCoda = deque(astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa))
-    print("path", pathCoda)
+    path = astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa)
 
-    while len(pathCoda) > 0:
+    if (path == []):
+        path = astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa, astar_neigh_monster)
+
+    if (path == []):
+        path = astar((player_pos[1]-1, player_pos[0]-1), (yTarget-1, xTarget-1), mapa, astar_neigh_unsafe)
+
+    pathCoda = deque(path)
+
+    while len(pathCoda) > 0 and player_pos[2] != "morto":
         coordRowColTarget = pathCoda.popleft()
         movements = next_movements_prolog(coordRowColTarget)
         execute_movements_player(movements)
@@ -202,32 +238,31 @@ class Th(Thread):
     def run(self):
 
         time.sleep(1)
-        turno = 0
+        #turno = 0
 
         update_prolog()
         while player_pos[2] != 'morto':
-            turno  += 1
-            print("\nTurno", turno)
+            #turno  += 1
+            #print("\nTurno", turno)
 
             acao = decisao()
-            print(acao)
+            #print(acao)
 
             if "esplorare" in acao:
-                acao = acao.replace("esplorare_", "")
-                coordStartInd = acao.find("(")
-                coordTarget = acao[coordStartInd+1: len(acao)-1].split(",")
+                acaoModif = acao.replace("esplorare_", "")
+                coordStartInd = acaoModif.find("(")
+                coordTarget = acaoModif[coordStartInd+1: len(acaoModif)-1].split(",")
                 xTarg, yTarg = int(coordTarget[0]), int(coordTarget[1])
-                print("Moving to", xTarg, yTarg)
+                #print("Moving to", xTarg, yTarg, "with energy:", energia)
                 
-                mode = acao[:coordStartInd]
-                print(mode)
-                print("Caselle certe ma non visitate:", set(certezas)-set(visitados))
+                mode = acaoModif[:coordStartInd]
+                #print(mode)
+                #print("Caselle certe ma non visitate:", set(certezas)-set(visitados))
                 if mode == "incerteza":
                     movements = next_movements_prolog((yTarg-1, xTarg-1))
                     execute_movements_player(movements)
                 else:
                     move_player_with_certeza_to(xTarg, yTarg)
-
 
             elif acao == "tornare":
                 move_player_with_certeza_to(1, 1)
@@ -239,9 +274,10 @@ class Th(Thread):
 
             elif acao == "scappare":
                 exec_prolog("andar")
-                
-            update_prolog()
-            time.sleep(auto_play_tempo)
+
+            if "esplorare" not in acao: # la execute_movements_player già fa la update e la sleep
+                update_prolog()
+                time.sleep(auto_play_tempo)
 
 
 def exec_prolog(a):
@@ -306,13 +342,6 @@ def update_prolog():
                 elif str(s) == 'palmas':
                     mapa[y.get_value()-1][x.get_value()-1] += 'T'
                 elif str(s) == 'passos':
-                    '''
-                    print(list(prolog.query(f"tile({x.get_value()},{y.get_value()},'d')")))
-                    if ((x.get_value, y.get_value) in visitados and prolog.query(f"tile({x.get_value},{y.get_value},'d')" == {})):
-                        mapa[y.get_value()-1][x.get_value()-1] += 'd'
-                    else:
-                        mapa[y.get_value()-1][x.get_value()-1] += 'D'
-                    '''
                     mapa[y.get_value()-1][x.get_value()-1] += 'D'
                 elif str(s) == 'reflexo':
                     mapa[y.get_value()-1][x.get_value()-1] += 'U'
