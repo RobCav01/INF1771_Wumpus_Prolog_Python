@@ -5,6 +5,8 @@
 :-dynamic certeza/2.
 :-dynamic energia/1.
 :-dynamic pontuacao/1.
+:-dynamic ori_raccolti/1.
+:-dynamic celle_pozioni/1.
 
 :-consult('mapa.pl').
 
@@ -26,7 +28,9 @@ reset_game :- retractall(memory(_,_,_)),
 			retractall(posicao(_,_,_)),
 			assert(energia(100)),
 			assert(pontuacao(0)),
-			assert(posicao(1,1, norte)).
+			assert(posicao(1,1, norte)),
+    		abolish(celle_pozioni/1),
+    		asserta(celle_pozioni([])).
 
 
 :-reset_game.
@@ -246,6 +250,33 @@ show_mem(_,0) :- energia(E), pontuacao(P), write('E: '), write(E), write('   P: 
 %executa_acao(pegar) :- tem_ouro(posicao).	%prende oro
 %executa_acao(tornare) :- peguei_todos_ouros, !.
 
+ori_raccolti(0).
+inizializza_celle_pozioni :-
+    abolish(celle_pozioni/1),
+    asserta(celle_pozioni([])).
+inizializza_celle_pozioni.
+
+
+aggiungi_cella_pozione(X, Y) :-
+    retract(celle_pozioni(ListaAttuale)),
+    NuovaLista = [(X, Y) | ListaAttuale],	% Aggiunge (X, Y) in cima
+    assert(celle_pozioni(NuovaLista)),	% Aggiorna la lista
+	celle_pozioni(Celle),
+	write("Aggiunta pozione, celle_pozioni: "),
+	write(Celle).
+
+rimuovi_cella_pozione(X, Y) :-
+    retract(celle_pozioni(ListaAttuale)),	
+    delete(ListaAttuale, (X, Y), NuovaLista),	% Rimuove (X, Y) dalla lista
+    assert(celle_pozioni(NuovaLista)),	% Aggiorna la lista
+	celle_pozioni(Celle),
+	write("Rimossa pozione, celle_pozioni: "),
+	write(Celle).
+
+
+presente_in_celle_pozioni(X, Y) :-
+    celle_pozioni(Celle),	% false se celle_pozioni è vuoto (ciò va bene perchè se è vuoto non può contenere (X, Y))
+    member((X, Y), Celle).
 
 % Calcolo della distanza di Manhattan
 manhattan_dist(X1, Y1, X2, Y2, Dist) :-
@@ -266,8 +297,8 @@ explore_certeza(X, Y) :-
         ),
         CelleConDistanza
     ),
-    sort(1, @=<, CelleConDistanza, [(_, X, Y) | _]),  % Ordina per distanza crescente e prende il primo elemento
-    !.
+    sort(1, @=<, CelleConDistanza, [(_, X, Y) | _]).  % Ordina per distanza crescente e prende il primo elemento
+    %min_member((_, X, Y), CelleConDistanza).	% Seleziona la cella con la distanza minima
 
 explore_not_certeza(X, Y) :-
     findall(
@@ -289,8 +320,7 @@ explore_not_certeza(X, Y) :-
         ),
         CelleAdiacentiPossibili
     ),
-    random_member((X, Y), CelleAdiacentiPossibili),	% Seleziona casualmente una cella
-	!.
+    random_member((X, Y), CelleAdiacentiPossibili).	% Seleziona casualmente una cella
 
 % Per sapere se in (X, Y) si ha in memoria uno tra '.   D' o '?   D'
 presenza_osservaz_mostro(X, Y) :-
@@ -306,6 +336,46 @@ presenza_incertezza_mostro(X, Y) :-
 presenza_incertezza_mostro_1_param((X, Y)) :-
     presenza_incertezza_mostro(X, Y).
 
+% Trova la pozione nota più vicina al player
+pozione_piu_vicina(X, Y) :-
+    celle_pozioni(Celle),
+    posicao(X_pl, Y_pl, _),	% Posizione del player
+    
+    findall(
+        (Dist, X_curr, Y_curr),
+        (
+			member((X_curr, Y_curr), Celle),  % Itera su ogni posizione nella lista
+			manhattan_dist(X_pl, Y_pl, X_curr, Y_curr, Dist)
+		),
+        DistanzeCelle
+    ),
+    min_member((_, X, Y), DistanzeCelle).	% Trova la cella con la distanza minima
+
+
+executa_acao(prendere) :-
+	posicao(X, Y, _), memory(X, Y, Z), Z = [brilho],
+	% aggiornamento ori_raccolti
+	ori_raccolti(N),
+    N2 is N + 1,
+    retract(ori_raccolti(N)),
+    assert(ori_raccolti(N2)).
+
+executa_acao(tornare) :- ori_raccolti(N), N = 3, !.
+
+executa_acao(scappare) :- posicao(X, Y, _), memory(X, Y, Z), Z = [passos], !.
+
+
+executa_acao(annota_pozione) :- posicao(X, Y, _), memory(X, Y, Z), Z = [reflexo],
+	\+presente_in_celle_pozioni(X, Y),	% Controlla se la pozione è già stata annotata
+	aggiungi_cella_pozione(X, Y), !.
+
+executa_acao(prendere) :- energia(E), E =< 80, posicao(X, Y, _), memory(X, Y, Z), Z = [reflexo], 
+	rimuovi_cella_pozione(X, Y), !.
+
+executa_acao(Acao) :-
+	energia(E), E =< 80,
+	pozione_piu_vicina(X, Y),
+	format(atom(Acao), 'esplorare_certeza(~w,~w)', [X, Y]), !.
 
 executa_acao(Acao) :-
     findall((X, Y), adjacente(X, Y), Adjacentes),
@@ -332,6 +402,46 @@ executa_acao(Acao) :-
 			Modalita = "incerteza"
 		)
     	->  format(atom(Acao), 'esplorare_~w(~w,~w)', [Modalita, X, Y])
-    ).
+    ), !.
 
-%executa_acao(tornare) :- posicao(X, Y, _), X=2, Y=3, !.
+% vai verso la cella visitata più vicina al player che abbia almeno una cella adiacente incerta
+% (questo perchè poi si forzerà il player ad esplorare quella cella incerta)
+executa_acao(Acao) :-
+    (   
+        (
+			cella_visitata_adj_a_incertezza_piu_vicina(X, Y)
+		)
+    	->  format(atom(Acao), 'esplorare_certeza(~w,~w)', [X, Y])
+    ), !.
+
+
+adiacenti_a(X, Y, AX, Y) :- map_size(MAX_X, _), X < MAX_X, AX is X + 1.
+adiacenti_a(X, Y, AX, Y) :- X > 1, AX is X - 1.
+adiacenti_a(X, Y, X, AY) :- map_size(_, MAX_Y), Y < MAX_Y, AY is Y + 1.
+adiacenti_a(X, Y, X, AY) :- Y > 1, AY is Y - 1.
+
+cella_visitata_adj_a_incertezza(X, Y) :-
+	visitado(X, Y),
+	findall(
+		(AX, AY),
+		(
+			adiacenti_a(X, Y, AX, AY),	% Ottiene una cella adiacente
+			\+ visitado(AX, AY),		% La cella adiacente non deve essere visitata
+    		\+ certeza(AX, AY)			% La cella adiacente non deve essere certa
+		),
+		AdiacentiIncerte
+	),
+	AdiacentiIncerte \= [].
+	
+cella_visitata_adj_a_incertezza_piu_vicina(X, Y) :-
+	posicao(X_pl, Y_pl, _),	% Posizione del player
+    % Trova tutte le celle che rispettano la regola "cella_visitata_adj_a_incertezza(X,Y)"
+    findall(
+		(Dist, X_curr, Y_curr), 
+		(
+			cella_visitata_adj_a_incertezza(X_curr, Y_curr),
+			manhattan_dist(X_pl, Y_pl, X_curr, Y_curr, Dist)
+		),
+		CelleDistanze
+	),
+    min_member((_, X, Y), CelleDistanze).	% Seleziona la cella con la distanza minima

@@ -12,7 +12,7 @@ from collections import deque
 
 
 
-auto_play_tempo = 0.2
+auto_play_tempo = 0.05
 auto_play = True # desligar para controlar manualmente
 show_map = False
 
@@ -45,6 +45,8 @@ certezas = []
 
 prolog = Prolog()
 prolog.consult((current_path + '\\main.pl').replace('\\','/'))
+prolog.consult((current_path + '\\mapa.pl').replace('\\','/'))
+
 
 last_action = ""
 
@@ -87,9 +89,9 @@ def astar(start, end, grid):
                     0 <= x_neigh < size_x and
                     0 <= y_neigh < size_y and
                     # sia già stato visitato o con certezza
-                    ((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
+                    #((x_neigh+1, y_neigh+1) in visitados or (x_neigh+1, y_neigh+1) in certezas) and
                     # e non sia un burrone/teletrasporto/mostro
-                    grid[y_neigh][x_neigh] not in ['P', 'T', 'D', 'd', 'PD']
+                    grid[y_neigh][x_neigh] not in ['P', 'T', 'D', 'PD']
             ):
                 tentative_g_score = g_score[current] + 1
 
@@ -166,6 +168,7 @@ def execute_movements_player(movementsProlog):
     for mov in movementsProlog:
         exec_prolog(mov)
         update_prolog()
+        print("Pos player", player_pos[0], player_pos[1])
         time.sleep(auto_play_tempo)
 
 def move_player_with_certeza_to(xTarget, yTarget):
@@ -208,6 +211,7 @@ class Th(Thread):
 
             acao = decisao()
             print(acao)
+
             if "esplorare" in acao:
                 acao = acao.replace("esplorare_", "")
                 coordStartInd = acao.find("(")
@@ -217,8 +221,7 @@ class Th(Thread):
                 
                 mode = acao[:coordStartInd]
                 print(mode)
-                print("Certezas:", certezas)
-                print("Visitados:", visitados)
+                print("Caselle certe ma non visitate:", set(certezas)-set(visitados))
                 if mode == "incerteza":
                     movements = next_movements_prolog((yTarg-1, xTarg-1))
                     execute_movements_player(movements)
@@ -231,8 +234,11 @@ class Th(Thread):
                 print("WIN!")
                 time.sleep(100)
 
-            else:
-                exec_prolog(acao)
+            elif acao == "prendere":
+                exec_prolog("pegar")
+
+            elif acao == "scappare":
+                exec_prolog("andar")
                 
             update_prolog()
             time.sleep(auto_play_tempo)
@@ -300,6 +306,13 @@ def update_prolog():
                 elif str(s) == 'palmas':
                     mapa[y.get_value()-1][x.get_value()-1] += 'T'
                 elif str(s) == 'passos':
+                    '''
+                    print(list(prolog.query(f"tile({x.get_value()},{y.get_value()},'d')")))
+                    if ((x.get_value, y.get_value) in visitados and prolog.query(f"tile({x.get_value},{y.get_value},'d')" == {})):
+                        mapa[y.get_value()-1][x.get_value()-1] += 'd'
+                    else:
+                        mapa[y.get_value()-1][x.get_value()-1] += 'D'
+                    '''
                     mapa[y.get_value()-1][x.get_value()-1] += 'D'
                 elif str(s) == 'reflexo':
                     mapa[y.get_value()-1][x.get_value()-1] += 'U'
